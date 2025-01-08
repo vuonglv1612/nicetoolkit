@@ -1,4 +1,5 @@
-name: Bump Version
+# .github/workflows/bump-version.yml
+name: Bump Version and Release
 
 on:
   push:
@@ -7,7 +8,7 @@ on:
       - main
 
 jobs:
-  bump-version:
+  bump-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -37,6 +38,7 @@ jobs:
         run: |
           if [[ -n "$(git status --porcelain VERSION)" ]]; then
             echo "VERSION_CHANGED=true" >> $GITHUB_OUTPUT
+            echo "NEW_VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
           fi
       
       - name: Commit and push if changed
@@ -45,6 +47,41 @@ jobs:
           git add VERSION
           git commit -m "bump: version update to $(cat VERSION)"
           git push
+      
+      - name: Create and push tag
+        if: steps.check_changes.outputs.VERSION_CHANGED == 'true'
+        run: |
+          VERSION=$(cat VERSION)
+          git tag -a "v${VERSION}" -m "Release version ${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Build package
+        if: steps.check_changes.outputs.VERSION_CHANGED == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+          python -m build
+
+      - name: Publish to PyPI
+        if: steps.check_changes.outputs.VERSION_CHANGED == 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload dist/*
+
+      - name: Create GitHub Release
+        if: steps.check_changes.outputs.VERSION_CHANGED == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "v${{ steps.check_changes.outputs.NEW_VERSION }}"
+          name: "Release v${{ steps.check_changes.outputs.NEW_VERSION }}"
+          draft: false
+          prerelease: false
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Handle errors
         if: failure()
