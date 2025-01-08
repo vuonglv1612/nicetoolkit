@@ -5,7 +5,7 @@ A toolkit for my personal use.
 ## Installation
 
 ```bash
-pip install nicetoolkit
+pip install nice-tool-kit
 ```
 ## Versioning
 
